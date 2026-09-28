@@ -76,6 +76,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const addButton = editorShell.querySelector(".rich-notes-add");
         const menu = editorShell.querySelector(".rich-notes-menu");
         const filter = editorShell.querySelector(".rich-notes-filter");
+        const imagePicker = editorShell.querySelector(".rich-notes-image-picker");
 
         function syncNotes() {
             input.value = editor.innerHTML.trim();
@@ -100,6 +101,24 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
 
+        imagePicker.addEventListener("change", async function () {
+            const image = imagePicker.files[0];
+            if (!image) return;
+            const upload = new FormData();
+            upload.append("action", "upload_note_image");
+            upload.append("csrf_token", editor.closest("form").querySelector('input[name="csrf_token"]').value);
+            upload.append("note_image", image);
+            try {
+                const response = await fetch("admin_dashboard.php", { method: "POST", body: upload });
+                const result = await response.json();
+                if (!response.ok || !result.path) throw new Error(result.error || "The image could not be uploaded.");
+                insertRichHtml(editor, '<img src="' + result.path + '" alt="' + image.name.replace(/"/g, "&quot;") + '"><p><br></p>');
+            } catch (error) {
+                window.alert(error.message || "The image could not be uploaded.");
+            }
+            imagePicker.value = "";
+        });
+
         menu.querySelectorAll("[data-rich-command]").forEach(function (button) {
             button.addEventListener("click", function () {
                 const command = button.getAttribute("data-rich-command");
@@ -115,8 +134,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 }
                 if (command === "image") {
-                    const url = window.prompt("Paste an image URL (https://...)");
-                    if (url) insertRichHtml(editor, '<img src="' + url.replace(/"/g, "&quot;") + '" alt="Course note image">');
+                    imagePicker.click();
                 }
                 menu.hidden = true;
                 addButton.setAttribute("aria-expanded", "false");

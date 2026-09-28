@@ -31,7 +31,7 @@ function admin_sanitize_course_notes($html)
         if ($tag === "br") return "<br>";
         if ($tag === "img") {
             $src = trim($node->getAttribute("src"));
-            return preg_match("#^(https?://|uploads/)#i", $src) ? '<img src="' . admin_escape($src) . '" alt="' . admin_escape($node->getAttribute("alt")) . '">' : "";
+            return preg_match("#^uploads/#i", $src) ? '<img src="' . admin_escape($src) . '" alt="' . admin_escape($node->getAttribute("alt")) . '">' : "";
         }
         if ($tag === "a") {
             $href = trim($node->getAttribute("href"));
@@ -52,6 +52,37 @@ if (!in_array($view, ["overview", "courses", "students", "messages", "team", "ac
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     admin_verify_csrf();
     $action = $_POST["action"] ?? "";
+
+    if ($action === "upload_note_image") {
+        header("Content-Type: application/json");
+        $upload = $_FILES["note_image"] ?? null;
+        $image_types = ["image/jpeg" => "jpg", "image/png" => "png", "image/webp" => "webp"];
+        if (!$upload || $upload["error"] !== UPLOAD_ERR_OK || $upload["size"] > 8 * 1024 * 1024) {
+            http_response_code(422);
+            echo json_encode(["error" => "Choose an image smaller than 8 MB."]);
+            exit();
+        }
+        $extension = $image_types[(new finfo(FILEINFO_MIME_TYPE))->file($upload["tmp_name"])] ?? null;
+        if (!$extension) {
+            http_response_code(422);
+            echo json_encode(["error" => "Only JPG, PNG, and WebP images are allowed."]);
+            exit();
+        }
+        $directory = __DIR__ . DIRECTORY_SEPARATOR . "uploads" . DIRECTORY_SEPARATOR . "course-notes";
+        if (!is_dir($directory) && !mkdir($directory, 0755, true)) {
+            http_response_code(500);
+            echo json_encode(["error" => "The image upload folder could not be created."]);
+            exit();
+        }
+        $filename = bin2hex(random_bytes(16)) . "." . $extension;
+        if (!move_uploaded_file($upload["tmp_name"], $directory . DIRECTORY_SEPARATOR . $filename)) {
+            http_response_code(500);
+            echo json_encode(["error" => "The image could not be uploaded."]);
+            exit();
+        }
+        echo json_encode(["path" => "uploads/course-notes/" . $filename]);
+        exit();
+    }
 
     if ($action === "upload_feature_image") {
         $feature_key = $_POST["feature_key"] ?? "";
@@ -645,7 +676,7 @@ $view_titles = [
                     <label for="requirements">Entry requirements</label><textarea id="requirements" name="requirements" rows="3" placeholder="Add each requirement on a new line" required></textarea>
                     <label for="course_outline">Course outline <span class="field-hint">Optional, one topic per line</span></label><textarea id="course_outline" name="course_outline" rows="4" placeholder="Topics or modules covered"></textarea>
                     <label for="course_notes">Full course notes <span class="field-hint">Use + to add headings, text, quotes, links, or images</span></label>
-                    <div class="rich-notes-editor" data-rich-notes-editor><div class="rich-notes-toolbar"><button class="rich-notes-add" type="button" aria-label="Add a note block" aria-expanded="false">+</button><div class="rich-notes-menu" hidden><input class="rich-notes-filter" type="search" placeholder="Filter blocks" aria-label="Filter note blocks"><button type="button" data-rich-command="paragraph">Text paragraph</button><button type="button" data-rich-command="heading">Heading</button><button type="button" data-rich-command="quote">Quote</button><button type="button" data-rich-command="link">Link</button><button type="button" data-rich-command="image">Image URL</button></div></div><p class="rich-notes-empty">Click <strong>+</strong> to add your first text, heading, image, quote, or link.</p><div class="rich-notes-content" contenteditable="true" role="textbox" aria-multiline="true" data-rich-notes-content></div><textarea id="course_notes" name="course_notes" class="rich-notes-input" hidden></textarea></div>
+                    <div class="rich-notes-editor" data-rich-notes-editor><div class="rich-notes-toolbar"><button class="rich-notes-add" type="button" aria-label="Add a note block" aria-expanded="false">+</button><div class="rich-notes-menu" hidden><input class="rich-notes-filter" type="search" placeholder="Filter blocks" aria-label="Filter note blocks"><button type="button" data-rich-command="paragraph">Text paragraph</button><button type="button" data-rich-command="heading">Heading</button><button type="button" data-rich-command="quote">Quote</button><button type="button" data-rich-command="link">Link</button><button type="button" data-rich-command="image">Image from computer</button></div></div><p class="rich-notes-empty">Click <strong>+</strong> to add your first text, heading, image, quote, or link.</p><div class="rich-notes-content" contenteditable="true" role="textbox" aria-multiline="true" data-rich-notes-content></div><input class="rich-notes-image-picker" type="file" accept="image/jpeg,image/png,image/webp" hidden><textarea id="course_notes" name="course_notes" class="rich-notes-input" hidden></textarea></div>
                     <label for="cover">Cover image <span class="field-hint">Optional, JPG / PNG / WebP, up to 5 MB</span></label><input id="cover" name="cover" type="file" accept="image/jpeg,image/png,image/webp">
                     <button class="admin-button admin-button-primary" type="submit">Publish course</button>
                 </form>
@@ -662,7 +693,7 @@ $view_titles = [
                     <label for="edit_requirements">Entry requirements</label><textarea id="edit_requirements" name="requirements" rows="3" required><?php echo admin_escape($edit_course["requirements"]); ?></textarea>
                     <label for="edit_outline">Course outline <span class="field-hint">Optional, one topic per line</span></label><textarea id="edit_outline" name="course_outline" rows="4"><?php echo admin_escape($edit_course["course_outline"]); ?></textarea>
                     <label for="edit_course_notes">Full course notes <span class="field-hint">Use + to add headings, text, quotes, links, or images</span></label>
-                    <div class="rich-notes-editor" data-rich-notes-editor><div class="rich-notes-toolbar"><button class="rich-notes-add" type="button" aria-label="Add a note block" aria-expanded="false">+</button><div class="rich-notes-menu" hidden><input class="rich-notes-filter" type="search" placeholder="Filter blocks" aria-label="Filter note blocks"><button type="button" data-rich-command="paragraph">Text paragraph</button><button type="button" data-rich-command="heading">Heading</button><button type="button" data-rich-command="quote">Quote</button><button type="button" data-rich-command="link">Link</button><button type="button" data-rich-command="image">Image URL</button></div></div><p class="rich-notes-empty">Click <strong>+</strong> to add your first text, heading, image, quote, or link.</p><div class="rich-notes-content" contenteditable="true" role="textbox" aria-multiline="true" data-rich-notes-content><?php echo admin_sanitize_course_notes($edit_course["course_notes"]); ?></div><textarea id="edit_course_notes" name="course_notes" class="rich-notes-input" hidden></textarea></div>
+                    <div class="rich-notes-editor" data-rich-notes-editor><div class="rich-notes-toolbar"><button class="rich-notes-add" type="button" aria-label="Add a note block" aria-expanded="false">+</button><div class="rich-notes-menu" hidden><input class="rich-notes-filter" type="search" placeholder="Filter blocks" aria-label="Filter note blocks"><button type="button" data-rich-command="paragraph">Text paragraph</button><button type="button" data-rich-command="heading">Heading</button><button type="button" data-rich-command="quote">Quote</button><button type="button" data-rich-command="link">Link</button><button type="button" data-rich-command="image">Image from computer</button></div></div><p class="rich-notes-empty">Click <strong>+</strong> to add your first text, heading, image, quote, or link.</p><div class="rich-notes-content" contenteditable="true" role="textbox" aria-multiline="true" data-rich-notes-content><?php echo admin_sanitize_course_notes($edit_course["course_notes"]); ?></div><input class="rich-notes-image-picker" type="file" accept="image/jpeg,image/png,image/webp" hidden><textarea id="edit_course_notes" name="course_notes" class="rich-notes-input" hidden></textarea></div>
                     <button class="admin-button admin-button-primary" type="submit">Save course details</button>
                 </form>
                 <?php endif; ?>

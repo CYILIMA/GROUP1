@@ -66,7 +66,7 @@ function course_detail_render_notes($notes, $course_images_by_id)
             if ($tag === "br") return "<br>";
             if ($tag === "img") {
                 $src = trim($node->getAttribute("src"));
-                return preg_match("#^(https?://|uploads/)#i", $src) ? '<img src="' . course_detail_escape($src) . '" alt="' . course_detail_escape($node->getAttribute("alt")) . '">' : "";
+                return preg_match("#^uploads/#i", $src) ? '<img src="' . course_detail_escape($src) . '" alt="' . course_detail_escape($node->getAttribute("alt")) . '">' : "";
             }
             if ($tag === "a") {
                 $href = trim($node->getAttribute("href"));
